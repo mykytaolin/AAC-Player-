@@ -1,6 +1,24 @@
+
 #include <Arduino.h>
-#include <SD.h>
 #include <SPI.h>
+//-------------------------------
+// ---------FILE SYSTEM---------//
+#include <SD.h>
+#include <FS.h>
+//-------------------------------
+//----------DISPLAY-------------//
+#include <TFT_eSPI.h>
+//--------------------------------
+//----------AUDIO---------------//
+#include <Adafruit_VS1053.h>
+#include "BluetoothA2DPSink.h"
+//--------------------------------
+//----------INTERFACE-----------//
+#include <Encoder.h>
+//--------------------------------
+#include "config.h"
+#include "display_manager.h" // display manager
+#include "audio_player.h" //audio manager
 
 // SD CARD CONNECTION SETUP
 //------------------------------------------------
