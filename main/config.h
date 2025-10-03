@@ -4,10 +4,18 @@
 //-------------PINOUT----------------
 
 // VS1053 AUDIO DECODER
+#define VS1053_BCLK 26 // Bit Clock
+#define VS1053_LRC 25 // Left/Right Clock
+#define VS1053_DOUT 27 // Data out from ESP32 to VS1053
+
+// PINOUT VS1053
 #define VS1053_CS 4
-#define VS1053_DCS 16
+#define VS1053_DCS 16  
 #define VS1053_DREQ 2
 #define VS1053_RST 17
+#define VS1053_XCS VS1053_CS 
+
+
 
 // SD CARD
 #define SD_CS 5
@@ -26,6 +34,14 @@
 #define BTN_VOL_DOWN 26
 
 //-------------SETTINGS----------------
+
+// AUDIO FORMATS
+#define SUPPORTED_FORMATS ".mp3 .aac .m4a .wav .flac"
+
+// AUDIO QUALITY
+#define SAMPLE_RATE 44100 // 44.1kHz
+#define BIT_DEPTH 16 // 16 bit audio
+#define I2S_BUFFER_SIZE 1024 // Buffer I2S
 
 // AUDIO
 #define VOLUME_MIN 0
