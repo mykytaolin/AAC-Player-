@@ -3,24 +3,24 @@
 AudioPlayer audioPlayer;
 
 // Constructor
-AudioPlayer::AudioPlayer(){
-  audio = new Audio() // dynamic creation Audio objects
+AudioPlayer::AudioPlayer() :player(VS1053_CS, VS1053_DCS. VS1053_DREQ, VS1053_RST){
+  
   state = STATE-STOPPED;
   current_source = SOURCE_SD_CARD;
-  current_volume = 50;
+  current_volume = DEFAULT_VOLUME;
   current_format = FORMAT_UNKNOWN;
-}
-
-//Destructor
-AudioPlayer::~AudioPlayer(){
-  if(audio){
-    delete(audio);
-  }
-}
+  
+} 
 
 bool AudioPlayer::begin(){
   Serial.println("Initializing high quality Audio Player (AAC/MP3)");
 
+  if(!player.begin()){  // VS1053 initialization
+    Serial.println("VS1053 not FOUND");
+    return false;
+  }
+  Serial.println("VS1053 is OK"); 
+  
   // Init SD card
   if(!SD.begin(SD_CS){
     Serial.println("SD card init failed");
@@ -28,95 +28,97 @@ bool AudioPlayer::begin(){
   }
   Serial.println(SD card OK);
 
-  // Config output audio I2S to VS1053
-  audio->setPinout(VS1053_BCLK, VS1053_LRC, VS1053_DOUT);
-
-  // Set callback
-  setuoAudioCallbacks();
-
   setVolume(DEFAULT_VOLUME);
 
-  Serial.println("AAC/MP3 PLAYER READY");
-  Serial.println("Supports formats MP3 AAC M4A WAV FLAC");
+  Serial.println("MP3 Player is READY");
+  Serial.println("Supported formats: MP3/WAV");
   
   return true;
 
 }
 
-// Setting callback func for info aboud audio
-void AudioPlayer:setupAudioCallbacks(){
-  audio->setNotifyCallback([this](const char* info) {
-    this->audioInfo(info);
-  });
-
-  audio->setNotifyOnConnect([](const char* info) {
-    Serial.printf("Connected %s\n", info);
-  });
+bool AudioPlayer::isSupportedFormat(String filename){
+  filename.toLowerCase();
+  return filename.endsWith(".mp3") || filename.endsWith(".wav");
 }
 
 bool AudioPlayer::playFile(String filename){
-    Serial.println("Playing" + filename);
 
-    stop();
-
-    // Audio Fromat Detection
-    if(audio->connectoFS(SD, filename.c_str())) {
-      current_file = filename;
-      state = STATE_PLAYING;
-      is_playing = true;
-
-      if(filename.endWith(".aac") || filename.endWith(".m4a") {
-        current_format = FORMAT_AAC;
-        Serial.println("Format AAC (HIGH QUALITY)");
-      }else if(filename.endWith(".mp3")) {
-        current_format = FORMAT_MP3;
-        Serial.println("Format MP3");
-      }else if(filename.endWith(".wav")) {
-        current_format = FORMAT_WAV;
-        Serial.println("Format WAV (LOSSLESS)");
-      }else{
-        current_format = UNKNOWN_FORMAT;
-        Serial.println("Format Unknown");
-      }
-      
-      return true;
-    }
-
-    Serial.println("Failed to play:" + filename);
+  if(!isSupportedFormat(filename)){
+    Serial.println("Format is not supported:" + filename);
+    Serial.println("Supported: .mp3 , .wav");
     return false;
+  }
+  Serial.println("Playing" + filename);
+  stop();
+
+  current_file = filename;
+
+  if(filename.endWith(".mp3"){
+    current_format = FORMAT_MP3;
+    Serial.println("Format: MP3");
+  }else if(filename.endWith(".wav")) {
+    current_format = FORMAT_WAV;
+    Serial.println("Format: WAV");
+  }
+    
+  state = STATE_PLAYING;
+  
+  // Data stream to VS1053
+  const int bufferSize = 32;
+  uint8_t buffer[bufferSize];
+
+  Serial.println("Playback STARTED");
+
+  while(file.available() && state == STATE_PLAYING){
+    int bytesRead = file.read(buffer, bufferSize);
+
+    // Sending data to VS1053
+    player.playChunk(buffer, bytesRead);
+
+    // Waiting for VS1053 to receive more data, DREQ = HIGH   
+    while(!digitalRead(VS1053_DREQ)){
+      delay(1); 
+    }
+    delay(1); // for stability
+  }
+  
+  file.close();
+
+  if(state == STATE_PLAYING){
+    state = STATE_STOPPED;
+    Serial.println("Playback FINISHED");
+  }
+
+  return true;
 }
 
 void AudioPlayer::pause(){
   if(state == STATE_PLAYING) {
-    audio->pauseResume();
     state = STATE_PAUSED;
     Serial.println("Playback PAUSED");
-  }  
+  }   
 }
 
 void AudioPlayer::resume(){
   if(state == STATE_PAUSED) {
-    audio->pauseResume();
     state = STATE_PLAYING;
     Serial.println("Playback RESUMED");
   }  
 }
 
 void AudioPlayer::stop(){
-  audio->stopSong();
   state = STATE_STOPPED;
-  is_playing = false;
   Serial.println("Playback STOPPED"); 
 }
 
 void AudioPlayer::setVolume(int volume){
   current_volume = constrain(volume, VOLUME_MIN, VOLUME_MAX);
-  int audio_volume = map(current_volume, VOLUME_MIN, VOLUME_MAX, 0, 21);
-  audio->setVolume(audio_volume);
+  player.setVolume(current_volume);
   Serial.println("VOLUME: " + String(current_volume) + "%");
 }
 
-void AudioPlayer:: volumeUP(){
+void AudioPlayer::volumeUP(){
   setVolume(current_volume + 5);  
 }
 
@@ -124,43 +126,14 @@ void AudioPlayer:: volumeDown(){
   setVolume(current_volume - 5);  
 }
 
-//Callback info about audio
-void AudioPlayer::audioInfo(const char* info){
-  Serial.prinf("Audio info: ");
-  Serial.println(info);
-
-  // TODO display actualization (bitrate)
-}
-
-void AudioPlayer::update() {
-  // Update audio state - calling in loop
-  audio->loop();
-
-  // Checking if song finished
-  if(state == STATE_PLAYING && !audio->isRunning()) {
-    state = STATE_STOPPED;
-    is_playing = false;
-    Serial.println("Playback FINISHED");
-
-    // TODO autoplay next track
-  }
-}
+void AudioPlayer::update(){};
 
 //FUNCTIONS OF GETTING
 PlayerState AudioPlayer::getState(){return state;}
 AudioSurce AudioPlayer::getSource(){return current_source;}
 String AudioPlayer::getCurrentFile(){return current_file;}
 AudioFormat AudioPlayer::getCurrentFormat(){return current_format;}
-bool AudioPlayer::isPlaying(){return is_playing;}
 int AudioPlayer::getVolume(){ return current_volume;}
-
-int AudioPlayer::getDuration(){
-  return audio->getAudioFileDuration();
-}
-
-int AudioPlauer::getCurrentTime(){
-  return audio->getAudioCurrentTime();
-}
 
 //BLUETOOTH
 void AudioPlayer::startBluetooth(){
@@ -168,10 +141,13 @@ void AudioPlayer::startBluetooth(){
   a2dp_sink.start("AAC-HQ-Player");
   current_source = SOURCE_BLUETOOTH;
   state = STATE_PLAYING;
+  Serial.println("Bluetooth is READY - connect from your phone");
 }
 
 void AudioPlayer::stopBluetooth(){
   a2dp_sink.stop();
   current_source = SOURCE_SD_CARD;
+  state = STATE_STOPPED;
+  Serial.println("Bluetooth STOPPED");
 }
   

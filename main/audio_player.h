@@ -2,15 +2,13 @@
 #define AUDIO_PLAYER_H
 
 #include <Arduino.h>
-#include <Audio.h>
-#include <VS1053Plugin.h>
+#include <VS1053.h>
 #include "BluetoothA2DPSink.h"
 #include <config.h>
 
 class AudioPlayer{ // classs that manage audio system (VS1053 and Bluetooth)
   private:
-    //VS1053Plugin vs1053_plugin; // hardware decoder VS1053 for different codecs
-    Audio* audio;
+    VS1053 player; // hardware decoder for MP3/WAV
     BluetoothA2DPSink a2dp_sink; // bluetooth reciever A2DP (sound from the phone)
 
     PlayerState state; // playing, pused, stoped
@@ -18,13 +16,10 @@ class AudioPlayer{ // classs that manage audio system (VS1053 and Bluetooth)
     int current_volume; // volume from 0 to 100
     String current_file; // active playing file ( needed for SD)
     AudioFormat current_format;
-    bool is_playing = false;
 
   public:
   
     AudioPlayer(); // constructor - init variables, (not hardware)
-    ~AudioPlayer(); // destructor - freeing mem   
-    
     bool begin(); // begin() - init hardware (VS1053, SD card) - calling in setup()
 
     // SD CARD PLAYBACK
@@ -49,22 +44,11 @@ class AudioPlayer{ // classs that manage audio system (VS1053 and Bluetooth)
     String getCurrentFile();
     AudioFormat getCurrentFormat();
     bool isPlaying();
-    int getDuration();
-    int getCurrentTime();
-    
-    // Bluetooth
-    void startBluetooth();
-    void stopBluetooth();
-
-    // Callback function for Audio library
-    void audioInfo(const char *info);
-    void audioEofSpeech(const char *info);
-    void audioShowstreamtitle(const char *info);
 
     void update();
     
   private:
-    void setupAudioCallbacks();
+    bool isSupportedFormat(String filename);
 };
 
 extern AudioPlayer audioPlayer;

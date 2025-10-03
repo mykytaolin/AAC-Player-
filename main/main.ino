@@ -10,7 +10,7 @@
 #include <TFT_eSPI.h>
 //--------------------------------
 //----------AUDIO---------------//
-#include <Adafruit_VS1053.h>
+#include <VS1053.h>
 #include "BluetoothA2DPSink.h"
 //--------------------------------
 //----------INTERFACE-----------//
@@ -19,27 +19,27 @@
 #include "config.h"
 #include "display_manager.h" // display manager
 #include "audio_player.h" //audio manager
+#include "file_manager.h"
+#include "interface_manager.h"
 
-// SD CARD CONNECTION SETUP
-//------------------------------------------------
-#define SD_CS 5 // GPIO5 - CS for SD card
-#define SD_SCK 18
-#define SD_MISO 19
-#define SD_MOSI 23 
-//------------------------------------------------
-// VS1053 CONNECTION SETUP
-#define VS1053_CS 4 // Chip select
-#define VS1053_DCS 16 // DATA/COMMAND SELECT
-#define VS1053_DREQ 2 // DATA REQUEST (interuption)
 //------------------------------------------------
 void disableUnusedServices(){
 //  WIFI.mode(WIFI_OFF);
   btStop();
 }
+
+VS1053 player(VS1053_CS, VS1053_DCS, VS1053_DREQ, VS1053_RST);
+
 void setup() {
   Serial.begin(115200);
   delay(1000);
 
+  if(player.begin(115200){
+    Serial.println("VS1053 was FOUND");
+  }else{
+    Serial.println("VS1053 NOT FOUND");
+  }
+  
   Serial.println("----ESP32 DevKitC Test -----");
   Serial.print("Chip Model: ");
   Serial.println(ESP.getChipModel());
@@ -57,7 +57,4 @@ void setup() {
 
 // the loop function runs over and over again forever
 void loop() {
-  digitalWrite(2, !digitalRead(2));
-  delay(1000);
-  Serial.println("Blink...");
 }
