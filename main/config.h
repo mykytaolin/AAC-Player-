@@ -14,9 +14,10 @@
 #define VS1053_DREQ 2 // Data request
 #define VS1053_RST 17 // XRESET
 
+
 // SD CARD
 #define SD_CS 5 // CS for SD CARD
-#define SC_SCK 18
+#define SD_SCK 18
 #define SD_MISO 19
 #define SD_MOSI 23
 
@@ -28,15 +29,15 @@
 // ENCODER & BUTTONS
 #define ENCODER_A 34
 #define ENCODER_B 35
-#define ENCODER_BIN 32
+#define ENCODER_BTN 32
 #define BTN_PLAY 33
-#define BTN_VOL_UP 25
-#define BTN_VOL_DOWN 26
+#define BTN_VOL_UP 13
+#define BTN_VOL_DOWN 14
 
 //-------------SETTINGS----------------
 
 // AUDIO FORMATS
-#define SUPPORTED_FORMATS ".mp3 .aac .m4a .wav .flac"
+#define SUPPORTED_FORMATS ".mp3 .wav"
 
 // AUDIO QUALITY
 #define SAMPLE_RATE 44100 // 44.1kHz
@@ -45,12 +46,12 @@
 
 // AUDIO
 #define VOLUME_MIN 0
-#define VOLUME_MAX 100
-#define DEFAULT_VOLUME 50
+#define VOLUME_MAX 255
+#define DEFAULT_VOLUME 150
 
 //DISPLAY
 #define SCREEN_WIDTH 240
-#define SCREEN HEIGHT 320
+#define SCREEN_HEIGHT 320
 #define TEXT_SIZE 2
 
 //FILE SYS
@@ -60,7 +61,6 @@
 //-------------DATA STRUCT----------------
 enum AudioFormat{
   FORMAT_MP3,
-  FORMAT_AAC,
   FORMAT_WAV,
   FORMAT_UNKNOWN
 };

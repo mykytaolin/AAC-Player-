@@ -5,6 +5,8 @@
 #include <VS1053.h>
 #include "BluetoothA2DPSink.h"
 #include <config.h>
+#include <SD.h>
+#include <SPI.h>
 
 class AudioPlayer{ // classs that manage audio system (VS1053 and Bluetooth)
   private:
@@ -44,6 +46,9 @@ class AudioPlayer{ // classs that manage audio system (VS1053 and Bluetooth)
     String getCurrentFile();
     AudioFormat getCurrentFormat();
     bool isPlaying();
+    void playChunk(uint8_t* buffer, int bytes) {
+      player.playChunk(buffer, bytes);
+    }
 
     void update();
     
@@ -51,6 +56,6 @@ class AudioPlayer{ // classs that manage audio system (VS1053 and Bluetooth)
     bool isSupportedFormat(String filename);
 };
 
-extern AudioPlayer audioPlayer;
+//extern AudioPlayer audioPlayer;
 
 #endif

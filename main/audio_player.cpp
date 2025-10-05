@@ -1,11 +1,14 @@
 #include "audio_player.h"
+#include <SD.h>
+#include <SPI.h>
 
 AudioPlayer audioPlayer;
 
 // Constructor
-AudioPlayer::AudioPlayer() :player(VS1053_CS, VS1053_DCS. VS1053_DREQ, VS1053_RST){
+AudioPlayer::AudioPlayer() 
+:player(VS1053_CS, VS1053_DCS, VS1053_DREQ){
   
-  state = STATE-STOPPED;
+  state = STATE_STOPPED;
   current_source = SOURCE_SD_CARD;
   current_volume = DEFAULT_VOLUME;
   current_format = FORMAT_UNKNOWN;
@@ -15,20 +18,25 @@ AudioPlayer::AudioPlayer() :player(VS1053_CS, VS1053_DCS. VS1053_DREQ, VS1053_RS
 bool AudioPlayer::begin(){
   Serial.println("Initializing high quality Audio Player (AAC/MP3)");
 
-  if(!player.begin()){  // VS1053 initialization
-    Serial.println("VS1053 not FOUND");
-    return false;
-  }
-  Serial.println("VS1053 is OK"); 
+  player.begin();
+
+  player.setVolume(0);
+  delay(50);
+
+  player.stopSong();
+  delay(50);
+
+  player.setVolume(70);
+  Serial.println("VS1053 is OK");   
   
   // Init SD card
-  if(!SD.begin(SD_CS){
+  if(!SD.begin(SD_CS)){
     Serial.println("SD card init failed");
     return false;
   }
-  Serial.println(SD card OK);
+  Serial.println("SD card OK");
 
-  setVolume(DEFAULT_VOLUME);
+  //setVolume(DEFAULT_VOLUME);
 
   Serial.println("MP3 Player is READY");
   Serial.println("Supported formats: MP3/WAV");
@@ -49,18 +57,28 @@ bool AudioPlayer::playFile(String filename){
     Serial.println("Supported: .mp3 , .wav");
     return false;
   }
+  
   Serial.println("Playing" + filename);
   stop();
 
+  File file = SD.open(filename);
+  if(!file){
+    Serial.println("Cannot open file" + filename);
+    return false;
+  }
+  
   current_file = filename;
 
-  if(filename.endWith(".mp3"){
+  if(filename.endsWith(".mp3")){
     current_format = FORMAT_MP3;
     Serial.println("Format: MP3");
-  }else if(filename.endWith(".wav")) {
+  }else if(filename.endsWith(".wav")) {
     current_format = FORMAT_WAV;
     Serial.println("Format: WAV");
   }
+  
+  player.setVolume(0);
+  delay(10);
     
   state = STATE_PLAYING;
   
@@ -69,6 +87,11 @@ bool AudioPlayer::playFile(String filename){
   uint8_t buffer[bufferSize];
 
   Serial.println("Playback STARTED");
+
+  player.stopSong();
+  delay(10);
+  player.startSong();
+  delay(10);
 
   while(file.available() && state == STATE_PLAYING){
     int bytesRead = file.read(buffer, bufferSize);
@@ -114,11 +137,12 @@ void AudioPlayer::stop(){
 
 void AudioPlayer::setVolume(int volume){
   current_volume = constrain(volume, VOLUME_MIN, VOLUME_MAX);
-  player.setVolume(current_volume);
-  Serial.println("VOLUME: " + String(current_volume) + "%");
+  int vs1053_volume = 255 - current_volume;
+  player.setVolume(vs1053_volume);
+  Serial.println("VOLUME: " + String(current_volume) + "/255");
 }
 
-void AudioPlayer::volumeUP(){
+void AudioPlayer::volumeUp(){
   setVolume(current_volume + 5);  
 }
 
@@ -130,7 +154,7 @@ void AudioPlayer::update(){};
 
 //FUNCTIONS OF GETTING
 PlayerState AudioPlayer::getState(){return state;}
-AudioSurce AudioPlayer::getSource(){return current_source;}
+AudioSource AudioPlayer::getSource(){return current_source;}
 String AudioPlayer::getCurrentFile(){return current_file;}
 AudioFormat AudioPlayer::getCurrentFormat(){return current_format;}
 int AudioPlayer::getVolume(){ return current_volume;}
