@@ -51,11 +51,16 @@ class AudioPlayer{ // classs that manage audio system (VS1053 and Bluetooth)
     }
 
     void update();
+    void configureForHeadphones();
+    void checkConfiguration();
     
   private:
     bool isSupportedFormat(String filename);
 };
 
-//extern AudioPlayer audioPlayer;
+void configureVS1053BForHeadphones();
+void checkVS1053BConfiguration();
+
+extern AudioPlayer audioPlayer;
 
 #endif

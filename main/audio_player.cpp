@@ -18,25 +18,45 @@ AudioPlayer::AudioPlayer()
 bool AudioPlayer::begin(){
   Serial.println("Initializing high quality Audio Player (AAC/MP3)");
 
+  /*       RESETING VS1053
+---------------------------------------*/
+  pinMode(VS1053_RST, OUTPUT);
+  digitalWrite(VS1053_RST, LOW);
+  delay(100);
+  digitalWrite(VS1053_RST, HIGH);
+  delay(100);
+  
   player.begin();
 
-  player.setVolume(0);
-  delay(50);
-
-  player.stopSong();
-  delay(50);
-
-  player.setVolume(70);
-  Serial.println("VS1053 is OK");   
+  // Simple test - try to set volume and see if DREQ responds
+  player.setVolume(0); // MAX volume
   
-  // Init SD card
+  // Check if DREQ pin responds (goes HIGH after initialization)
+  delay(50);
+
+  if (digitalRead(VS1053_DREQ) == HIGH) {
+    Serial.println("VS1053B OK - DREQ responding");
+  } else {
+    Serial.println("VS1053B WARNING - DREQ not responding, but continuing...");
+  }
+  /*       Config headphones
+---------------------------------------*/
+  player.softReset();
+  delay(100);
+  
+  player.writeRegister(0x0B, 0x0001); // Optimize for headphones
+  
+  player.setVolume(0);
+  Serial.println("VS1053 is Configured for headphones");
+  
+  // Init SD card 
   if(!SD.begin(SD_CS)){
     Serial.println("SD card init failed");
     return false;
   }
   Serial.println("SD card OK");
 
-  //setVolume(DEFAULT_VOLUME);
+  setVolume(80);
 
   Serial.println("MP3 Player is READY");
   Serial.println("Supported formats: MP3/WAV");
@@ -77,8 +97,7 @@ bool AudioPlayer::playFile(String filename){
     Serial.println("Format: WAV");
   }
   
-  player.setVolume(0);
-  delay(10);
+  setVolume(current_volume);
     
   state = STATE_PLAYING;
   
@@ -103,6 +122,8 @@ bool AudioPlayer::playFile(String filename){
     while(!digitalRead(VS1053_DREQ)){
       delay(1); 
     }
+    if(state != STATE_PLAYING) break;
+    
     delay(1); // for stability
   }
   
@@ -137,9 +158,9 @@ void AudioPlayer::stop(){
 
 void AudioPlayer::setVolume(int volume){
   current_volume = constrain(volume, VOLUME_MIN, VOLUME_MAX);
-  int vs1053_volume = 255 - current_volume;
+  int vs1053_volume = map(current_volume, VOLUME_MIN, VOLUME_MAX, 0, 255);
   player.setVolume(vs1053_volume);
-  Serial.println("VOLUME: " + String(current_volume) + "/255");
+  Serial.println("VOLUME: " + String(current_volume) + "%");
 }
 
 void AudioPlayer::volumeUp(){
@@ -174,4 +195,28 @@ void AudioPlayer::stopBluetooth(){
   state = STATE_STOPPED;
   Serial.println("Bluetooth STOPPED");
 }
+void AudioPlayer::configureForHeadphones() {
+  // Soft reset
+  player.softReset();
+  delay(100);
   
+  // Set volume to MAX (0 = max, 255 = min)
+  player.setVolume(0);
+  
+  // Configure for headphone use on SPK output
+  player.writeRegister(0x0B, 0x0000); // Set default
+  delay(10);
+  player.writeRegister(0x0B, 0x0001); // Lower drive current
+  delay(10);
+}
+
+void AudioPlayer::checkConfiguration() {
+  Serial.println("----VS1053B CONFIGURATION----");
+
+  Serial.print("DREQ state: ");
+  Serial.println(digitalRead(VS1053_DREQ));
+  Serial.print("Current volume: ");
+  Serial.println(current_volume);
+  
+  Serial.println("VS1053B basic check completed");
+}

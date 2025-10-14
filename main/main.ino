@@ -23,329 +23,662 @@
 
 extern AudioPlayer audioPlayer;
 VS1053 player(VS1053_CS, VS1053_DCS, VS1053_DREQ);
+void listMP3Files();
 
 void setup() {
-  //Serial.begin(115200);
-  //delay(1000);
-  
-  //Serial.println("----MP3 Test -----");
-  
-  //if(!audioPlayer.begin()){
-    //Serial.println("Initialization FAILED");
-    //return;
-  //}
-
-  //Serial.println("Pliki na karcie:");
-  //listFiles("/");
-  
-  // Test odtwarzania
-  //testPlayback();
-  
-  //Serial.println("✅All systems READY");
-  //Serial.println("Connect headphones to VS1053");
-
-  //delay(3000);
-  //testPlayback();
-
-  //pinMode(BTN_PLAY, INPUT_PULLUP);
-  //pinMode(BTN_VOL_UP, INPUT_PULLUP);
-  //pinMode(BTN_VOL_DOWN, INPUT_PULLUP);
   Serial.begin(115200);
-  delay(3000);
+  delay(1000);
+  
+  Serial.println("----MP3 Player HeadPhones FIX -----");
+
+/*       RESETING VS1053
+---------------------------------------*/
   pinMode(VS1053_RST, OUTPUT);
   digitalWrite(VS1053_RST, LOW);
   delay(100);
   digitalWrite(VS1053_RST, HIGH);
   delay(100);
-  
-  Serial.println("=== TEST VS1053 ===");
-  Serial.println("=== TEST VS1053 ===");
-  
-  Serial.print("VS1053 begin... ");
-  player.begin();
-  Serial.println("DONE");
-  
-  Serial.print("VS1053 set volume... ");
-  player.setVolume(50);
-  Serial.println("DONE");
-  Serial.println("✅ VS1053 initialized (if no errors)");
 
+/*       INIT VS1053
+---------------------------------------*/
+  player.begin();
+  // Simple test - set volume and check DREQ
+  player.setVolume(0);
+  delay(50);
+
+  if (digitalRead(VS1053_DREQ) == HIGH) {
+    Serial.println("OK - VS1053B responding");
+  
+    // Configure for HEADPHONES on SPK output
+    configureVS1053BForHeadphones();
+  
+    Serial.println("VS1053B configured for HEADPHONES on SPK output");
+  }else{
+    Serial.println("WARNING - DREQ not high, but continuing...");
+  }
+
+/*       SD CARD INIT
+---------------------------------------*/
   Serial.print("SD card... ");
   if (SD.begin(SD_CS)) {
     Serial.println("OK");
-    
-    Serial.println("Files on SD:");
-    File root = SD.open("/");
-    File file = root.openNextFile();
-    while (file) {
-      Serial.print("  ");
-      Serial.println(file.name());
-      file = root.openNextFile();
-    }
-  } else {
+    listMP3Files();
+  }else {
     Serial.println("FAILED");
+    while(1);
   }
 
-  Serial.println("Testing HP output...");  
-  
-  Serial.println("You should hear 500Hz tone in headphones");
-  
-  Serial.println("=== TEST PLAYBACK ===");
-  if (SD.exists("/test.mp3")) {
-    Serial.println("Found test.mp3 - attempting playback...");
-  
-  // Test playback
-  
-  debugVS1053();
-  setMaxVolumeDirect();
-  testTones();
-  testPlayback();
+  Serial.println("Connect headphones");  
+  Serial.println("Testing test.mp3");  
 
-  } else {
-    Serial.println("test.mp3 not found - create this file on SD");
-  }
+  configureVS1053BForHeadphones();
+  checkMP3File("/test.mp3");
+  playFirstMP3();
   
-  Serial.println("=== TEST COMPLETE ===");
+}
+void listMP3Files(){
+  Serial.println("MP3 files on SD:");
+  File root = SD.open("/");
+  File file = root.openNextFile();
+  bool found = false;
+
+  while(file){
+    String filename = String(file.name());
+    if(filename.endsWith(".mp3") || filename.endsWith(".MP3")){
+      Serial.print(" ");
+      Serial.println(filename);
+      found = true;
+    }
+    file = root.openNextFile();
+  }
+  if(!found){
+    Serial.println("No MP3 files found");
+  }
 }
 
-void testPlayback() {
-
-  player.setVolume(0);  // MAX volume
-  Serial.println("Volume set to 100%");
+void playFirstMP3() {
+  Serial.println("🎯 playFirstMP3() called");
   
-  File file = SD.open("/test.mp3");
-  if (!file) {
-    Serial.println("Cannot open test.mp3");
+  String filename = "/test.mp3";
+  
+  if(SD.exists(filename)) {
+    Serial.println("✅ test.mp3 found");
+    playMP3File(filename);
+  } else {
+    Serial.println("❌ test.mp3 not found");
+    
+    // Szukaj innych plików MP3
+    File root = SD.open("/");
+    while(File file = root.openNextFile()) {
+      String foundFilename = String(file.name());
+      if(foundFilename.endsWith(".mp3") || foundFilename.endsWith(".MP3")) {
+        Serial.println("Found alternative: " + foundFilename);
+        playMP3File("/" + foundFilename);
+        root.close();
+        return;
+      }
+    }
+    root.close();
+    Serial.println("❌ No MP3 files found!");
+  }
+}
+void configureVS1053ForMP3() {
+  Serial.println("Configuring VS1053 for MP3 decoding...");
+  
+  // ★★★ HARD RESET ★★★
+  digitalWrite(VS1053_RST, LOW);
+  delay(100);
+  digitalWrite(VS1053_RST, HIGH);
+  delay(100);
+  
+  // ★★★ LIBRARY INIT ★★★
+  player.begin();
+  
+  // ★★★ KONFIGURACJA DLA MP3 ★★★
+  player.writeRegister(SCI_MODE, 0x0800);  // SM_SDINEW - VS1002 native mode
+  delay(10);
+  
+  player.writeRegister(SCI_CLOCKF, 0x8800); // 3.5x multiplier, 12.288MHz
+  delay(10);
+  
+  player.writeRegister(SCI_BASS, 0x0000);   // Flat response
+  delay(10);
+  
+  player.writeRegister(SCI_AUDATA, 44101);  // 44.1kHz stereo
+  delay(10);
+  
+  // ★★★ TURN OFF EFFECTS THAT CAN CLOCK REGISTERS ★★★
+  player.writeRegister(SCI_AIADDR, 0x0000); // CHECKING IF THERE ARE ANY ACTIVE TESTS
+  delay(10);
+  
+  // ★★★ SET VOLUME ★★★
+  player.setVolume(65); // MAX volume
+  
+  Serial.println("VS1053 configured for MP3 decoding");
+}
+
+
+void playMP3File(String filename){
+  Serial.println("🚀 STARTING MP3 PLAYBACK WITH MP3 CONFIG");
+  
+  if(!SD.exists(filename)){
+    Serial.println("❌ File not found");
+    return;
+  }
+
+  // ★★★ USING MP3 CONFIG ★★★
+  configureVS1053ForMP3();
+  delay(100);
+
+  File file = SD.open(filename);
+  if(!file){
+    Serial.println("❌ Cannot open file");
     return;
   }
   
-  const int bufferSize = 32;
-  uint8_t buffer[bufferSize];
+  Serial.print("📁 File size: ");
+  Serial.println(file.size());
+
+  player.setVolume(65);
+
+  // ★★★ DECODER START ★★★
+  player.startSong();
+  delay(50);
   
-  Serial.println("Playback started...");
-  unsigned long startTime = millis();
-  
-  while (file.available()) {
-    int bytesRead = file.read(buffer, bufferSize);
+  Serial.println("🎵 Sending MP3 data to decoder...");
+
+  uint8_t buffer[32];
+  unsigned long bytesSent = 0;
+  unsigned long lastPrint = millis();
+  bool decoderBusy = false;
+
+  while(file.available()){
+    int bytesRead = file.read(buffer, 32);
+    bytesSent += bytesRead;
+
+    // ★★★ SEND DATA TO MP3 DECODER ★★★
     player.playChunk(buffer, bytesRead);
-    
-    while (!digitalRead(VS1053_DREQ)) {
+
+    // WAITING ON DRAQ
+    unsigned long waitStart = millis();
+    while(!digitalRead(VS1053_DREQ)) {
       delay(1);
     }
+    unsigned long waitTime = millis() - waitStart;
     
-    if (millis() - startTime > 2000) {
-      Serial.print(".");
-      startTime = millis();
+    // if waiting more than 1ms than it's decoding now
+    if(waitTime > 1 && !decoderBusy) {
+      Serial.println("✅ DECODER STARTED WORKING!");
+      decoderBusy = true;
     }
-    
-    delay(1);
+
+    // SHOW PROGRESS
+    if(millis() - lastPrint > 1000) {
+      Serial.print(".");
+      lastPrint = millis();
+    }
   }
   
   file.close();
-  Serial.println("\nPlayback finished");
+  Serial.println("\n✅ PLAYBACK COMPLETE");
+  Serial.print("📊 Total bytes sent: ");
+  Serial.println(bytesSent);
+  
+  if(!decoderBusy) {
+    Serial.println("❌ WARNING: Decoder never became busy - MP3 not being decoded");
+  }
 }
-void testSPKWithHeadphones() {
-  Serial.println("Testing SPK with headphones - VOLUME MAX");
+
+void checkMP3File(String filename) {
+  Serial.println("=== FILE ANALYSIS ===");
+  
+  if(!SD.exists(filename)) {
+    Serial.println("File does not exist");
+    return;
+  }
+
+  File file = SD.open(filename);
+  if(!file) {
+    Serial.println("Cannot open file");
+    return;
+  }
+
+  Serial.print("File: ");
+  Serial.println(filename);
+  Serial.print("Size: ");
+  Serial.print(file.size());
+  Serial.println(" bytes");
+
+  // CHECK FILE VOLUME
+  uint8_t header[12];
+  if(file.read(header, 12) == 12) {
+    Serial.print("First 12 bytes: ");
+    for(int i=0; i<12; i++) {
+      if(header[i] < 0x10) Serial.print("0");
+      Serial.print(header[i], HEX);
+      Serial.print(" ");
+    }
+    Serial.println();
+  
+  file.close();
+  }
+}
+void configureVS1053BForHeadphones() {
+  Serial.println("Configuring VS1053B for headphones...");
+  
+  // Soft reset
+  player.softReset();
+  delay(100);
+  
+  // ★★★ SET MODE TO MP3 DECODER ★★★
+  player.writeRegister(SCI_MODE, 0x0804); // SM_SDINEW | SM_RESET
+  delay(100);
+  
+  // ★★★ TURN OFF TEST MODE AND SET NORMAL MODE ★★★
+  player.writeRegister(SCI_MODE, 0x0800); // Tylko SM_SDINEW
+  delay(10);
+  
+  // SET CLOCK
+  player.writeRegister(SCI_CLOCKF, 0x8800); // 3.5x multiplier
+  delay(10);
+  
+  // SET NORMAL VOLUME
+  player.setVolume(65); 
+  delay(10);
+  
+  player.writeRegister(0x00, 0x0800); // SCI_MODE - tylko SM_SDINEW
+  delay(10);
+  
+  Serial.println("VS1053B configured for headphones");
+}
+void testHeadphoneConnection() {
+  Serial.println("Testing headphone connection...");
+  
+  // SET NORMAL VOLUME
+  player.setVolume(65);
+  
+  Serial.println("You should hear audio now - check headphones");
+  
+  // SIMPLE TEST
+  player.startSong();
+  
+  // TEST WITH SOME SINEWAVES
+  testSimpleTone(1000); // 1kHz
+  delay(2000);
+  testSimpleTone(2000); // 2kHz  
+  delay(2000);
+  testSimpleTone(500);  // 500Hz
+  delay(2000);
+  
+  // STOP TEST
+  stopTestTone();
+  Serial.println("Test tones finished - should be silent now");
+}
+
+void testSimpleTone(int freq) {
+  Serial.print("Testing ");
+  Serial.print(freq);
+  Serial.println("Hz tone");
+  
+  player.writeRegister(SCI_MODE, 0x0820); // SM_TESTS | SM_SDINEW
+  
+  // SET TEST FREQUANCY 
+  uint16_t freq_val = (uint16_t)((freq * 65536L) / 44100);
+  player.writeRegister(SCI_AICTRL0, freq_val); // Lewy kanał
+  player.writeRegister(SCI_AICTRL1, freq_val); // Prawy kanał
+  
+  // START TEST
+  player.writeRegister(SCI_AIADDR, 0x4020);
+  
+  delay(2000);
+}
+void stopTestTone() {
+  // STOP SINEWAVE TEST
+  player.writeRegister(SCI_AIADDR, 0x0000); // Stop test
+  player.writeRegister(SCI_MODE, 0x0800);   // Normal mode (tylko SM_SDINEW)
+  delay(10);
+}
+
+void testVS1053Configurations() {
+  Serial.println("=== TESTING VS1053 CONFIGURATIONS ===");
+  
+  // BASIC CONFIG
+  Serial.println("Test 1: Basic configuration");
+  player.softReset();
+  delay(100);
+  player.writeRegister(SCI_MODE, 0x0800); // SM_SDINEW
+  player.writeRegister(SCI_CLOCKF, 0x8800); // Clock
   player.setVolume(0);
-  
-  player.writeRegister(0x0, 0x0820);
-  player.writeRegister(0x05, 0x3A18); // 150Hz - niski ton
+  playShortTest();
   delay(2000);
-  player.writeRegister(0x05, 0x0000);
-  player.writeRegister(0x0, 0x0800);
-}
 
-void testSineWave() {
-  Serial.println("Testing VS1053 sine wave...");
-  
-  // Włącz test sinusoidalny (1kHz)
-  player.writeRegister(0x0, 0x0820);  // MODE = SM_TESTS | SM_SDINEW
-  player.writeRegister(0x05, 0xAC45); // 1000Hz sine wave
+  // TEST2 WITH rESET
+  Serial.println("Test 2: With reset");
+  player.softReset();
+  delay(100);
+  player.writeRegister(SCI_MODE, 0x0804); // SM_SDINEW | SM_RESET
+  delay(100);
+  player.writeRegister(SCI_MODE, 0x0800); // SM_SDINEW
+  player.writeRegister(SCI_CLOCKF, 0x8800);
+  player.setVolume(0);
+  playShortTest();
   delay(2000);
-  
 
-  player.writeRegister(0x05, 0x0000);
-  player.writeRegister(0x0, 0x0800);  // Normal mode
-  
-  Serial.println("Sine wave test finished - should hear 1kHz tone");
+  // TEST3 WITH MORE MODIFICATIONS (bass/treble)
+  Serial.println("Test 3: With bass/treble");
+  player.softReset();
+  delay(100);
+  player.writeRegister(SCI_MODE, 0x0800);
+  player.writeRegister(SCI_CLOCKF, 0x8800);
+  player.writeRegister(SCI_BASS, 0x0000); // Flat response
+  player.setVolume(0);
+  playShortTest();
+  delay(2000);
 }
-void debugVS1053() {
-  Serial.println("=== VS1053 DEBUG ===");
+void playShortTest() {
+  if(!SD.exists("/test.mp3")) return;
   
-  uint16_t version = 0;
-  for (int i = 0; i < 3; i++) {
-    player.setVolume(0); // 0 = max volume
-    delay(100);
-
-    Serial.print("DREQ state: ");
-    Serial.println(digitalRead(VS1053_DREQ));
-    delay(100);
+  File file = SD.open("/test.mp3");
+  if(!file) return;
+  
+  player.startSong();
+  
+  // SEND FIRST 2000 bytes
+  uint8_t buffer[32];
+  unsigned long bytesSent = 0;
+  
+  while(file.available() && bytesSent < 2000) {
+    int bytesRead = file.read(buffer, 32);
+    bytesSent += bytesRead;
+    
+    player.playChunk(buffer, bytesRead);
+    
+    while(!digitalRead(VS1053_DREQ)) {
+      delay(1);
+    }
   }
   
-  Serial.println("VS1053 basic test completed");
+  file.close();
+  Serial.print("Short test completed - bytes sent: ");
+  Serial.println(bytesSent);
 }
-void setMaxVolumeDirect() {
-  Serial.println("Setting MAX volume...");
+void checkMP3Detection() {
+  Serial.println("=== CHECKING MP3 DETECTION ===");
+  
+  if(!SD.exists("/test.mp3")) {
+    Serial.println("test.mp3 not found");
+    return;
+  }
 
-  Serial.println("Testing volume 0 (MAX)...");
-  player.setVolume(0);
-  delay(1000);
+  // CONFIG VS1053
+  configureVS1053BForHeadphones();
+  player.startSong();
   
-  Serial.println("Testing volume 50...");
-  player.setVolume(50);
-  delay(1000);
+  File file = SD.open("/test.mp3");
+  if(!file) {
+    Serial.println("Cannot open file");
+    return;
+  }
+
+  // SEND FIRST 500 bytes AND SEE WHAT HAPPENd
+  uint8_t buffer[500];
+  file.read(buffer, 500);
   
-  Serial.println("Testing volume 100...");
-  player.setVolume(100);
-  delay(1000);
+  Serial.println("Sending 500 bytes to VS1053...");
   
-  Serial.println("Testing volume 0 again...");
-  player.setVolume(0); // MAX volume
-}
-void testTones() {
-  Serial.println("=== TONE TESTS ===");
-  
-  player.setVolume(0); // MAX volume
-  
-  int frequencies[] = {100, 500, 1000, 2000};
-  
-  for (int i = 0; i < 4; i++) {
-    Serial.print("Testing frequency: ");
-    Serial.print(frequencies[i]);
-    Serial.println("Hz");
+  for(int i = 0; i < 500; i += 32) {
+    int chunkSize = min(32, 500 - i);
+    player.playChunk(&buffer[i], chunkSize);
     
-    player.writeRegister(0x00, 0x0820); // SM_TESTS | SM_SDINEW
-    
-    uint16_t freq_value;
-    switch(frequencies[i]) {
-      case 100: freq_value = 0x2A10; break;
-      case 500: freq_value = 0x6A60; break;
-      case 1000: freq_value = 0xAC45; break;
-      case 2000: freq_value = 0x7D12; break;
-      default: freq_value = 0x6A60;
+    while(!digitalRead(VS1053_DREQ)) {
+      delay(1);
     }
+  }
+  
+  file.close();
+  
+  // ★★★ CHECKING IF VS1035 IS BUSY DECODING ★★★
+  Serial.println("Checking if VS1053 is busy decoding...");
+  delay(1000);
+  
+  if(digitalRead(VS1053_DREQ) == LOW) {
+    Serial.println("✅ VS1053 is BUSY (DREQ=LOW) - likely decoding MP3!");
+  } else {
+    Serial.println("❌ VS1053 is READY (DREQ=HIGH) - not decoding");
+  }
+}
+
+
+void testMP3File(String filename) {
+  if(!SD.exists(filename)) return;
+  
+  File file = SD.open(filename);
+  if(!file) return;
+  
+  // Hard reset VS1053
+  digitalWrite(VS1053_RST, LOW);
+  delay(100);
+  digitalWrite(VS1053_RST, HIGH);
+  delay(100);
+  
+  // Basic configuration
+  player.begin();
+  player.writeRegister(SCI_MODE, 0x0800);
+  player.writeRegister(SCI_CLOCKF, 0x8800);
+  player.setVolume(0);
+  player.startSong();
+  
+  // SEND ONLY 10 KB FOR TESTIUNG
+  uint8_t buffer[32];
+  unsigned long bytesSent = 0;
+  
+  while(file.available() && bytesSent < 10240) {
+    int bytesRead = file.read(buffer, 32);
+    bytesSent += bytesRead;
     
-    player.writeRegister(0x05, freq_value);
-    delay(2000);
+    player.playChunk(buffer, bytesRead);
     
-    // Wyłącz test
-    player.writeRegister(0x05, 0x0000);
-    player.writeRegister(0x00, 0x0800);
+    while(!digitalRead(VS1053_DREQ)) {
+      delay(1);
+    }
+  }
+  
+  file.close();
+  Serial.print("  Sent ");
+  Serial.print(bytesSent);
+  Serial.println(" bytes");
+  
+  // CHECKING IF VS1053 IS BUSY
+  delay(500);
+  if(digitalRead(VS1053_DREQ) == LOW) {
+    Serial.println("  ✅ VS1053 is DECODING!");
+  } else {
+    Serial.println("  ❌ VS1053 is NOT decoding");
+  }
+}
+
+
+
+void checkAudioOutput() {
+  Serial.println("=== AUDIO OUTPUT CHECK ===");
+  
+  Serial.println("VS1053 Audio Output Pins:");
+  Serial.println("LEFT  - Pin 46");
+  Serial.println("RIGHT - Pin 39"); 
+  Serial.println("GBUF  - Pin 42 (common/ground for headphones)");
+  Serial.println("SPK   - Single output (may be connected to GBUF)");
+  
+  Serial.println("Headphone connection:");
+  Serial.println("Connect headphones between SPK and GBUF");
+  Serial.println("OR between LEFT/RIGHT and GBUF if SPK not available");
+  
+  Serial.println("Testing audio output with sine wave...");
+  
+  // Test LEFT channel
+  Serial.println("Testing LEFT channel...");
+  player.writeRegister(SCI_MODE, 0x0820);
+  player.writeRegister(SCI_AICTRL0, 0x0C34); // 1000Hz to LEFT
+  player.writeRegister(SCI_AICTRL1, 0x0000); // Mute RIGHT
+  player.writeRegister(SCI_AIADDR, 0x4020);
+  delay(2000);
+  
+  // Test RIGHT channel  
+  Serial.println("Testing RIGHT channel...");
+  player.writeRegister(SCI_AICTRL0, 0x0000); // Mute LEFT
+  player.writeRegister(SCI_AICTRL1, 0x0C34); // 1000Hz to RIGHT
+  delay(2000);
+  
+  // Test both channels
+  Serial.println("Testing BOTH channels...");
+  player.writeRegister(SCI_AICTRL0, 0x0C34); // 1000Hz to LEFT
+  player.writeRegister(SCI_AICTRL1, 0x0C34); // 1000Hz to RIGHT
+  delay(2000);
+  
+  player.writeRegister(SCI_AIADDR, 0x0000);
+  player.writeRegister(SCI_MODE, 0x0800);
+  
+  Serial.println("Audio output test completed");
+}
+
+void checkAudioConfiguration() {
+  Serial.println("=== AUDIO CONFIGURATION CHECK ===");
+  
+  // Sprawdź rejestr STATUS dla konfiguracji audio
+  // SCI_STATUS zawiera informacje o wzmacniaczu i referencji
+  
+  Serial.println("Audio configuration tips:");
+  Serial.println("1. GBUF must NOT be connected to ground");
+  Serial.println("2. LEFT/RIGHT need coupling capacitors if GBUF not used");
+  Serial.println("3. Check if SPK output is actually connected to GBUF");
+  Serial.println("4. Verify headphone impedance (16-32Ω recommended)");
+  
+  Serial.println("Testing different volume levels...");
+  
+  for(int vol = 0; vol <= 100; vol += 25) {
+    Serial.print("Volume: ");
+    Serial.println(vol);
+    player.setVolume(vol);
+    
+    // Krótki test tone
+    player.writeRegister(SCI_MODE, 0x0820);
+    player.writeRegister(SCI_AICTRL0, 0x0C34);
+    player.writeRegister(SCI_AICTRL1, 0x0C34);
+    player.writeRegister(SCI_AIADDR, 0x4020);
+    delay(1000);
+    player.writeRegister(SCI_AIADDR, 0x0000);
+    player.writeRegister(SCI_MODE, 0x0800);
     
     delay(500);
   }
+  
+  player.setVolume(60);
 }
-//void listFiles(const char* dirname) {
-  //File root = SD.open(dirname);
-  //if (!root) {
-    //Serial.println("Open folder error");
-    //return;
-  //}
-  
-  //File file = root.openNextFile();
-  //while (file) {
-    //Serial.print("  ");
-    //Serial.print(file.name());
-    //Serial.print(" (");
-    //Serial.print(file.size());
-    //Serial.println(" bytes)");
-    //file = root.openNextFile();
-  //}
-//}
 
-//void testPlayback() {
-  //Serial.println("=== PLAYING TEST ===");
+void testAudioOutputModes() {
+  Serial.println("=== TESTING AUDIO OUTPUT MODES ===");
   
-  //const char* filenames[] = {"test.mp3", "music.mp3", "1.mp3", "song.mp3"};
+  // Tryb 1: Normalny
+  Serial.println("Mode 1: Normal output");
+  configureVS1053ForMP3();
+  playShortMP3Test();
+  delay(2000);
   
-  //for (int i = 0; i < 4; i++) {
-    //if (SD.exists(filenames[i])) {
-      //Serial.print("Playing: ");
-      //Serial.println(filenames[i]);
-      
-      //if (audioPlayer.playFile(filenames[i])) {
-        //Serial.println("✅ Playback successful");
-      //}else {
-        //Serial.println("❌ Playback failed");
-      //}
-      //return;
-    //}
-  //}
-  //Serial.println("Can't find any file MP3!");
-//}
-
-//void playFile(File file) {
-  //const int bufferSize = 32;
-  //uint8_t buffer[bufferSize];
+  // BASS MODE
+  Serial.println("Mode 2: With bass enhancement");
+  player.writeRegister(SCI_BASS, 0x007A); // Bass boost
+  playShortMP3Test();
+  delay(2000);
   
-  //unsigned long startTime = millis();
-  
-  //while (file.available()) {
-    //int bytesRead = file.read(buffer, bufferSize);
-    //audioPlayer.playChunk(buffer, bytesRead);
+  // DIFFERENT FREQUANCIES
+  Serial.println("Mode 3: Different test frequencies");
+  int freqs[] = {500, 1000, 2000, 4000};
+  for(int i = 0; i < 4; i++) {
+    Serial.print("Testing ");
+    Serial.print(freqs[i]);
+    Serial.println("Hz");
     
-    //while (!digitalRead(VS1053_DREQ)) {
-      //delay(1);
-    //}
-    
-    //if (millis() - startTime > 2000) {
-      //Serial.print(".");
-      //startTime = millis();
-    //}
-    
-    //delay(1);
-  //}
+    player.writeRegister(SCI_MODE, 0x0820);
+    uint16_t freq_val = (uint16_t)((freqs[i] * 65536L) / 44100);
+    player.writeRegister(SCI_AICTRL0, freq_val);
+    player.writeRegister(SCI_AICTRL1, freq_val);
+    player.writeRegister(SCI_AIADDR, 0x4020);
+    delay(1000);
+    player.writeRegister(SCI_AIADDR, 0x0000);
+    player.writeRegister(SCI_MODE, 0x0800);
+    delay(500);
+  }
+}
+
+void playShortMP3Test() {
+  if(!SD.exists("/test.mp3")) return;
   
-  //Serial.println("\nEND OF FILE");
-//}
+  File file = SD.open("/test.mp3");
+  if(!file) return;
+  
+  player.startSong();
+  
+  uint8_t buffer[32];
+  unsigned long bytesSent = 0;
+  
+  // SEND JUST 10KB FOR TEST
+  while(file.available() && bytesSent < 10240) {
+    int bytesRead = file.read(buffer, 32);
+    bytesSent += bytesRead;
+    
+    player.playChunk(buffer, bytesRead);
+    
+    while(!digitalRead(VS1053_DREQ)) {
+      delay(1);
+    }
+  }
+  
+  file.close();
+  Serial.print("  Sent ");
+  Serial.print(bytesSent);
+  Serial.println(" bytes");
+}
 
+void diagnoseHeadphoneConnection() {
+  Serial.println("=== HEADPHONE CONNECTION DIAGNOSIS ===");
+  
+  Serial.println("VS1053B has TWO possible audio outputs:");
+  Serial.println("1. SPK output - single ended headphone output");
+  Serial.println("2. LEFT/RIGHT + GBUF - differential output");
+  
+  Serial.println("For SPK output:");
+  Serial.println("  Connect headphones between SPK and GND");
+  Serial.println("  SPK may already be internally connected to GBUF");
+  
+  Serial.println("For differential output:");
+  Serial.println("  Connect LEFT to tip, RIGHT to ring, GBUF to sleeve");
+  Serial.println("  GBUF provides common voltage (~1.24V)");
+  
+  Serial.println("Troubleshooting:");
+  Serial.println("✓ Check if headphones work with other devices");
+  Serial.println("✓ Try different headphones");
+  Serial.println("✓ Verify SPK/GBUF connection");
+  Serial.println("✓ Check solder joints on audio outputs");
+  
+  Serial.println("Testing SPK vs LEFT/RIGHT outputs...");
+  
+  Serial.println("If you hear sound in ANY test, note which one works:");
+}
+void loop(){
+  Serial.println("\n=== Available commands ===");
+  Serial.println("audio - check audio output");
+  Serial.println("volume - test volume levels");
+  Serial.println("modes - test audio output modes");
+  Serial.println("hp - headphone connection diagnosis");
+  Serial.println("play - play MP3 with current config");
+  Serial.println("==========================");
 
-void loop() {
-  //audioPlayer.update();
+  String command = Serial.readString();
+  command.trim();
 
-  //if(digitalRead(BTN_PLAY) == LOW){
-    //delay(50); // debounce
-    //if(digitalRead(BTN_PLAY) == LOW){
-      //if(audioPlayer.getState() == STATE_PLAYING){
-        //audioPlayer.pause();
-      //}else{
-        //audioPlayer.resume();
-      //}
-      //while(digitalRead(BTN_PLAY) == LOW); // wait for low state
-    //}
-  //}
-
-  //if(digitalRead(BTN_VOL_UP) == LOW){
-    //delay(50);
-    //if(digitalRead(BTN_VOL_UP) == LOW){
-      //audioPlayer.volumeUp();
-      //while(digitalRead(BTN_VOL_UP) == LOW);
-    //}
-  //}
-
-  //if(digitalRead(BTN_VOL_DOWN) == LOW){
-    //delay(50);
-    //if(digitalRead(BTN_VOL_DOWN) == LOW){
-      //audioPlayer.volumeDown();
-      //while(digitalRead(BTN_VOL_DOWN) == LOW);
-    //}
-  //}
-  //if(Serial.available()){
-    //char cmd = Serial.read();
-    //switch(cmd){
-      //case '+': audioPlayer.volumeUp(); break;
-      //case '-': audioPlayer.volumeDown(); break;
-      //case 'p':
-        //if(audioPlayer.getState() == STATE_PLAYING){
-          //audioPlayer.pause();
-        //}else{
-          //audioPlayer.resume();
-        //}
-        //break;
-      //case 's': audioPlayer.stop(); break;
-      //case 'b': audioPlayer.startBluetooth(); break;
-      //case 't': testPlayback(); break;
-    //}
-  //}
-  //delay(100);
+  if (command == "audio") checkAudioOutput();
+  else if (command == "volume") checkAudioConfiguration();
+  else if (command == "modes") testAudioOutputModes();
+  else if (command == "hp") diagnoseHeadphoneConnection();
+  else if (command == "play") playFirstMP3();
+  else Serial.println("Unknown command: " + command);
 }
