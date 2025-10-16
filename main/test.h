@@ -1,0 +1,13 @@
+void checkMP3File(String filename);
+void testHeadphoneConnection();
+void testSimpleTone(int freq);
+void stopTestTone();
+void testVS1053Configurations();
+void playShortTest();
+void checkMP3Detection();
+void testMP3File(String filename);
+void checkAudioOutput();
+void checkAudioConfiguration();
+void testAudioOutputModes();
+void playShortMP3Test();
+void diagnoseHeadphoneConnection();
